@@ -7,9 +7,9 @@ from watchdog.events import FileSystemEventHandler
 from datetime import datetime
 
 # Directory to monitor
-WATCH_DIR = os.path.expanduser("~/monitored_directory")
+WATCH_DIR = os.path.expanduser("/home")
 # Log file to store hashes
-LOG_FILE = os.path.expanduser("~/pe_file_hashes.log")
+LOG_FILE = os.path.expanduser("/var/log/pe_file_hashes.log")
 
 class PEFileHandler(FileSystemEventHandler):
     def on_created(self, event):

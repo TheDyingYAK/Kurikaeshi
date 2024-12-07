@@ -36,7 +36,6 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/python3 /home/your_username/pe_monitor/monitor_pe_files.py
 Restart=always
-User=your_username
 WorkingDirectory=/home/your_username/pe_monitor
 
 [Install]
