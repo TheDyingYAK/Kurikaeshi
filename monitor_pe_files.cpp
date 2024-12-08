@@ -4,16 +4,28 @@
 #include <vector>
 #include <filesystem>
 #include <openssl/md5.h>
+#include <openssl/sha.h>
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <chrono>
 #include <ctime>
 
 namespace fs = std::filesystem;
-using namespace std; // Remove the need for std::
+using namespace std; // Simplifies code readability
 
 const string WATCH_DIR = "/home"; // Directory to monitor
 const string LOG_FILE = "/var/log/pe_file_hashes.log";
+
+// Helper function to convert hash bytes to a string
+string bytes_to_hex(unsigned char* hash, size_t length) {
+    string result;
+    char buf[3];
+    for (size_t i = 0; i < length; i++) {
+        sprintf(buf, "%02x", hash[i]);
+        result.append(buf);
+    }
+    return result;
+}
 
 // Function to calculate the MD5 hash of a file
 string calculate_md5(const string& filepath) {
@@ -34,21 +46,62 @@ string calculate_md5(const string& filepath) {
     }
 
     MD5_Final(md5_result, &md5_context);
-
-    char md5_string[2 * MD5_DIGEST_LENGTH + 1];
-    for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
-        sprintf(&md5_string[i * 2], "%02x", md5_result[i]);
-    }
-
-    return string(md5_string);
+    return bytes_to_hex(md5_result, MD5_DIGEST_LENGTH);
 }
 
-// Function to log to a file
-void log_md5(const string& filepath, const string& md5_hash) {
+// Function to calculate the SHA-1 hash of a file
+string calculate_sha1(const string& filepath) {
+    unsigned char buffer[8192];
+    unsigned char sha1_result[SHA_DIGEST_LENGTH];
+    ifstream file(filepath, ios::binary);
+
+    if (!file) {
+        cerr << "Failed to open file: " << filepath << endl;
+        return "";
+    }
+
+    SHA_CTX sha1_context;
+    SHA1_Init(&sha1_context);
+
+    while (file.read(reinterpret_cast<char*>(buffer), sizeof(buffer))) {
+        SHA1_Update(&sha1_context, buffer, file.gcount());
+    }
+
+    SHA1_Final(sha1_result, &sha1_context);
+    return bytes_to_hex(sha1_result, SHA_DIGEST_LENGTH);
+}
+
+// Function to calculate the SHA-256 hash of a file
+string calculate_sha256(const string& filepath) {
+    unsigned char buffer[8192];
+    unsigned char sha256_result[SHA256_DIGEST_LENGTH];
+    ifstream file(filepath, ios::binary);
+
+    if (!file) {
+        cerr << "Failed to open file: " << filepath << endl;
+        return "";
+    }
+
+    SHA256_CTX sha256_context;
+    SHA256_Init(&sha256_context);
+
+    while (file.read(reinterpret_cast<char*>(buffer), sizeof(buffer))) {
+        SHA256_Update(&sha256_context, buffer, file.gcount());
+    }
+
+    SHA256_Final(sha256_result, &sha256_context);
+    return bytes_to_hex(sha256_result, SHA256_DIGEST_LENGTH);
+}
+
+// Function to log hashes to a file
+void log_hashes(const string& filepath, const string& md5_hash, const string& sha1_hash, const string& sha256_hash) {
     ofstream log(LOG_FILE, ios::app);
     if (log) {
         auto now = chrono::system_clock::to_time_t(chrono::system_clock::now());
-        log << ctime(&now) << filepath << " - MD5: " << md5_hash << endl;
+        log << ctime(&now) << filepath << endl;
+        log << "  MD5:    " << md5_hash << endl;
+        log << "  SHA-1:  " << sha1_hash << endl;
+        log << "  SHA-256:" << sha256_hash << endl;
     }
     else {
         cerr << "Failed to write to log file: " << LOG_FILE << endl;
@@ -90,8 +143,7 @@ int main() {
             perror("read");
             break;
         }
-
-        // Process inotify events
+                // Process inotify events
         for (char* ptr = buffer; ptr < buffer + length;) {
             struct inotify_event* event = reinterpret_cast<struct inotify_event*>(ptr);
 
@@ -102,9 +154,15 @@ int main() {
                     cout << "New PE file detected: " << filepath << endl;
 
                     string md5_hash = calculate_md5(filepath);
-                    if (!md5_hash.empty()) {
-                        log_md5(filepath, md5_hash);
-                        cout << "MD5 hash recorded: " << md5_hash << endl;
+                    string sha1_hash = calculate_sha1(filepath);
+                    string sha256_hash = calculate_sha256(filepath);
+
+                    if (!md5_hash.empty() && !sha1_hash.empty() && !sha256_hash.empty()) {
+                        log_hashes(filepath, md5_hash, sha1_hash, sha256_hash);
+                        cout << "Hashes recorded:" << endl;
+                        cout << "  MD5:    " << md5_hash << endl;
+                        cout << "  SHA-1:  " << sha1_hash << endl;
+                        cout << "  SHA-256:" << sha256_hash << endl;
                     }
                 }
             }
