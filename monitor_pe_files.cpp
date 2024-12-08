@@ -3,15 +3,14 @@
 #include <string>
 #include <vector>
 #include <filesystem>
-#include <openssl/md5.h>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <chrono>
 #include <ctime>
 
 namespace fs = std::filesystem;
-using namespace std; // Simplifies code readability
+using namespace std;
 
 const string WATCH_DIR = "/home"; // Directory to monitor
 const string LOG_FILE = "/var/log/pe_file_hashes.log";
@@ -27,70 +26,65 @@ string bytes_to_hex(unsigned char* hash, size_t length) {
     return result;
 }
 
-// Function to calculate the MD5 hash of a file
+// Generalized function to compute a hash using the EVP interface
+string calculate_hash(const string& filepath, const EVP_MD* hash_algorithm) {
+    unsigned char buffer[8192];
+    unsigned char hash_result[EVP_MAX_MD_SIZE];
+    unsigned int hash_length = 0;
+    ifstream file(filepath, ios::binary);
+
+    if (!file) {
+        cerr << "Failed to open file: " << filepath << endl;
+        return "";
+    }
+
+    // Create and initialize the digest context
+    EVP_MD_CTX* context = EVP_MD_CTX_new();
+    if (!context) {
+        cerr << "Failed to create digest context" << endl;
+        return "";
+    }
+
+    // Initialize the digest operation
+    if (EVP_DigestInit_ex(context, hash_algorithm, nullptr) != 1) {
+        cerr << "Failed to initialize digest operation" << endl;
+        EVP_MD_CTX_free(context);
+        return "";
+    }
+
+    // Update the digest with file data
+    while (file.read(reinterpret_cast<char*>(buffer), sizeof(buffer))) {
+        if (EVP_DigestUpdate(context, buffer, file.gcount()) != 1) {
+            cerr << "Failed to update digest" << endl;
+            EVP_MD_CTX_free(context);
+            return "";
+        }
+    }
+
+    // Finalize the digest
+    if (EVP_DigestFinal_ex(context, hash_result, &hash_length) != 1) {
+        cerr << "Failed to finalize digest" << endl;
+        EVP_MD_CTX_free(context);
+        return "";
+    }
+
+    // Free the digest context
+    EVP_MD_CTX_free(context);
+
+    return bytes_to_hex(hash_result, hash_length);
+}
+
+// Wrapper functions for MD5, SHA-1, and SHA-256
 string calculate_md5(const string& filepath) {
-    unsigned char buffer[8192];
-    unsigned char md5_result[MD5_DIGEST_LENGTH];
-    ifstream file(filepath, ios::binary);
-
-    if (!file) {
-        cerr << "Failed to open file: " << filepath << endl;
-        return "";
-    }
-
-    MD5_CTX md5_context;
-    MD5_Init(&md5_context);
-
-    while (file.read(reinterpret_cast<char*>(buffer), sizeof(buffer))) {
-        MD5_Update(&md5_context, buffer, file.gcount());
-    }
-
-    MD5_Final(md5_result, &md5_context);
-    return bytes_to_hex(md5_result, MD5_DIGEST_LENGTH);
+    return calculate_hash(filepath, EVP_md5());
 }
 
-// Function to calculate the SHA-1 hash of a file
 string calculate_sha1(const string& filepath) {
-    unsigned char buffer[8192];
-    unsigned char sha1_result[SHA_DIGEST_LENGTH];
-    ifstream file(filepath, ios::binary);
-
-    if (!file) {
-        cerr << "Failed to open file: " << filepath << endl;
-        return "";
-    }
-
-    SHA_CTX sha1_context;
-    SHA1_Init(&sha1_context);
-
-    while (file.read(reinterpret_cast<char*>(buffer), sizeof(buffer))) {
-        SHA1_Update(&sha1_context, buffer, file.gcount());
-    }
-
-    SHA1_Final(sha1_result, &sha1_context);
-    return bytes_to_hex(sha1_result, SHA_DIGEST_LENGTH);
+    return calculate_hash(filepath, EVP_sha1());
 }
 
-// Function to calculate the SHA-256 hash of a file
 string calculate_sha256(const string& filepath) {
-    unsigned char buffer[8192];
-    unsigned char sha256_result[SHA256_DIGEST_LENGTH];
-    ifstream file(filepath, ios::binary);
-
-    if (!file) {
-        cerr << "Failed to open file: " << filepath << endl;
-        return "";
-    }
-
-    SHA256_CTX sha256_context;
-    SHA256_Init(&sha256_context);
-
-    while (file.read(reinterpret_cast<char*>(buffer), sizeof(buffer))) {
-        SHA256_Update(&sha256_context, buffer, file.gcount());
-    }
-
-    SHA256_Final(sha256_result, &sha256_context);
-    return bytes_to_hex(sha256_result, SHA256_DIGEST_LENGTH);
+    return calculate_hash(filepath, EVP_sha256());
 }
 
 // Function to log hashes to a file
@@ -143,7 +137,8 @@ int main() {
             perror("read");
             break;
         }
-                // Process inotify events
+
+        // Process inotify events
         for (char* ptr = buffer; ptr < buffer + length;) {
             struct inotify_event* event = reinterpret_cast<struct inotify_event*>(ptr);
 

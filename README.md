@@ -86,3 +86,8 @@ If you encounter any issues, check the logs:
 sudo journalctl -u pe_monitor.service
 ```
 This setup ensures that the service runs automatically, monitors the specified directory for new .exe files, and logs their MD5 hashes
+
+
+
+
+g++ -std=c++20 -o monitor_pe_files monitor_pe_files.cpp -lssl -lcrypto
