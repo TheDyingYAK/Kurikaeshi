@@ -21,6 +21,20 @@ python3 -m pip install -r requirements.txt
 chmod +x monitor_pe_files.py
 ```
 
+
+### Compile
+1. Install the dependencies
+```bash
+sudo apt update
+sudo apt install g++ libssl-dev
+```
+
+2. Compile the program
+```bash
+g++ -std=c++20 -o monitor_pe_files monitor_pe_files.cpp -lssl -lcrypto
+```
+
+
 ### Set up the Systemd Service
 1. Create the service file:
 ```bash
@@ -85,9 +99,12 @@ If you encounter any issues, check the logs:
 ```bash
 sudo journalctl -u pe_monitor.service
 ```
+
+
+You can manually test the program by simply running the executable and putting a .exe in one of the monitored directories
+```bash
+sudo ./monitor_pe_files
+```
 This setup ensures that the service runs automatically, monitors the specified directory for new .exe files, and logs their MD5 hashes
 
 
-
-
-g++ -std=c++20 -o monitor_pe_files monitor_pe_files.cpp -lssl -lcrypto
