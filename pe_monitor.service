@@ -1,11 +1,15 @@
 [Unit]
-Description=Monitor directory for new PE files and generate MD5 hashes
+Description=Monitor PE Files and Log Hashes
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/your_username/pe_monitor/monitor_pe_files.py
+ExecStart=/path/to/monitor_pe_files
+WorkingDirectory=/path/to
+User=root
+Group=root
 Restart=always
-WorkingDirectory=/home/your_username/pe_monitor
+StandardOutput=append:/var/log/monitor_pe_files.log
+StandardError=append:/var/log/monitor_pe_files_error.log
 
 [Install]
 WantedBy=multi-user.target
