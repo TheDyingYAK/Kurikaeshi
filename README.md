@@ -4,24 +4,6 @@ Service to automatically hash any exe file created in the users directory
 ![alt text](img/repetition.png)
 
 
-### Install Prerequisites
-1. Ensure Python3 is installed:
-```bash
-sudo apt update
-sudo apt install python3 python3-pip -y
-```
-
-2. Install the requirements
-```bash
-python3 -m pip install -r requirements.txt
-```
-
-3. Ensure the python script "monitor_pe_files.py" is executable
-```bash
-chmod +x monitor_pe_files.py
-```
-
-
 ### Compile
 1. Install the dependencies
 ```bash
@@ -48,7 +30,7 @@ Description=Monitor directory for new PE files and generate MD5 hashes
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/your_username/pe_monitor/monitor_pe_files.py
+ExecStart=/usr/bin/python3 /home/your_username/pe_monitor/monitor_pe_files
 Restart=always
 WorkingDirectory=/home/your_username/pe_monitor
 
@@ -99,12 +81,19 @@ If you encounter any issues, check the logs:
 ```bash
 sudo journalctl -u pe_monitor.service
 ```
-
-
 You can manually test the program by simply running the executable and putting a .exe in one of the monitored directories
 ```bash
 sudo ./monitor_pe_files
 ```
 This setup ensures that the service runs automatically, monitors the specified directory for new .exe files, and logs their MD5 hashes
+
+
+### Performance considerations
+intify limits: Increase the inotify watch limit to handle many directories
+```bash
+echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```
+
 
 

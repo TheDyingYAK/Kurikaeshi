@@ -103,9 +103,9 @@ void log_hashes(const string& filepath, const string& md5_hash, const string& sh
 }
 
 int main() {
-    // Ensure the directory exists
-    if (!fs::exists(WATCH_DIR)) {
-        cerr << "Directory does not exist: " << WATCH_DIR << endl;
+    // Ensure the directories exist
+    if (!fs::exists("/home") || !fs::exists("/root")) {
+        cerr << "Required directories do not exist: /home or /root" << endl;
         return 1;
     }
 
@@ -116,15 +116,32 @@ int main() {
         return 1;
     }
 
-    // Add watch to the directory
-    int watch_descriptor = inotify_add_watch(inotify_fd, WATCH_DIR.c_str(), IN_CREATE);
-    if (watch_descriptor < 0) {
-        perror("inotify_add_watch");
-        close(inotify_fd);
-        return 1;
-    }
+    // Map to store watch descriptors and corresponding paths
+    unordered_map<int, string> watch_descriptors;
 
-    cout << "Monitoring directory: " << WATCH_DIR << endl;
+    // Function to add a watch recursively
+    auto add_watch_recursive = [&](const string& dir) {
+        try {
+            for (const auto& entry : fs::recursive_directory_iterator(dir)) {
+                if (entry.is_directory()) {
+                    int wd = inotify_add_watch(inotify_fd, entry.path().c_str(), IN_CREATE);
+                    if (wd < 0) {
+                        cerr << "Failed to add watch for: " << entry.path() << endl;
+                    } else {
+                        watch_descriptors[wd] = entry.path();
+                    }
+                }
+            }
+        } catch (const fs::filesystem_error& e) {
+            cerr << "Filesystem error: " << e.what() << endl;
+        }
+    };
+
+    // Add watches for /home and /root recursively
+    add_watch_recursive("/home");
+    add_watch_recursive("/root");
+
+    cout << "Monitoring directories recursively under /home and /root" << endl;
 
     // Buffer to store inotify events
     constexpr size_t BUF_LEN = 1024 * (sizeof(struct inotify_event) + 16);
@@ -142,22 +159,33 @@ int main() {
         for (char* ptr = buffer; ptr < buffer + length;) {
             struct inotify_event* event = reinterpret_cast<struct inotify_event*>(ptr);
 
-            if (event->len > 0 && (event->mask & IN_CREATE)) {
-                string filename(event->name);
-                if (filename.ends_with(".exe")) {
-                    string filepath = WATCH_DIR + "/" + filename;
-                    cout << "New PE file detected: " << filepath << endl;
+            if (event->len > 0) {
+                string filename = watch_descriptors[event->wd] + "/" + event->name;
 
-                    string md5_hash = calculate_md5(filepath);
-                    string sha1_hash = calculate_sha1(filepath);
-                    string sha256_hash = calculate_sha256(filepath);
+                if (event->mask & IN_CREATE) {
+                    if (fs::is_directory(filename)) {
+                        // Add a watch for the newly created directory
+                        int wd = inotify_add_watch(inotify_fd, filename.c_str(), IN_CREATE);
+                        if (wd >= 0) {
+                            watch_descriptors[wd] = filename;
+                            cout << "Added watch for new directory: " << filename << endl;
+                        } else {
+                            cerr << "Failed to add watch for new directory: " << filename << endl;
+                        }
+                    } else if (filename.ends_with(".exe")) {
+                        cout << "New PE file detected: " << filename << endl;
 
-                    if (!md5_hash.empty() && !sha1_hash.empty() && !sha256_hash.empty()) {
-                        log_hashes(filepath, md5_hash, sha1_hash, sha256_hash);
-                        cout << "Hashes recorded:" << endl;
-                        cout << "  MD5:    " << md5_hash << endl;
-                        cout << "  SHA-1:  " << sha1_hash << endl;
-                        cout << "  SHA-256:" << sha256_hash << endl;
+                        string md5_hash = calculate_md5(filename);
+                        string sha1_hash = calculate_sha1(filename);
+                        string sha256_hash = calculate_sha256(filename);
+
+                        if (!md5_hash.empty() && !sha1_hash.empty() && !sha256_hash.empty()) {
+                            log_hashes(filename, md5_hash, sha1_hash, sha256_hash);
+                            cout << "Hashes recorded:" << endl;
+                            cout << "  MD5:    " << md5_hash << endl;
+                            cout << "  SHA-1:  " << sha1_hash << endl;
+                            cout << "  SHA-256:" << sha256_hash << endl;
+                        }
                     }
                 }
             }
@@ -167,7 +195,9 @@ int main() {
     }
 
     // Cleanup
-    inotify_rm_watch(inotify_fd, watch_descriptor);
+    for (const auto& [wd, path] : watch_descriptors) {
+        inotify_rm_watch(inotify_fd, wd);
+    }
     close(inotify_fd);
 
     return 0;
