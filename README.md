@@ -20,7 +20,7 @@ g++ -std=c++20 -o monitor_pe_files monitor_pe_files.cpp -lssl -lcrypto
 ### Set up the Systemd Service
 1. Create the service file:
 ```bash
-sudo vim /etc/systemd/system/pe_monitor.service
+sudo vim /etc/systemd/system/pe_monitor_files.service
 ```
 
 2. Add the following content to the file:
