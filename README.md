@@ -1,5 +1,5 @@
 # Kurikaeshi
-Service to automatically hash any exe file created in the users directory
+Service to automatically hash exe files that are placed in the home and root directorys
 
 ![alt text](img/repetition.png)
 

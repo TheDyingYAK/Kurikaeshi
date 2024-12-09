@@ -1,105 +1,112 @@
-#include <iostream>
+\#include <iostream>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <filesystem>
-#include <openssl/evp.h>
+#include <openssl/md5.h>
+#include <openssl/sha.h>
 #include <sys/inotify.h>
 #include <unistd.h>
-#include <chrono>
-#include <ctime>
+#include <cstring>
 
 namespace fs = std::filesystem;
 using namespace std;
 
-const string WATCH_DIR = "/home"; // Directory to monitor
-const string LOG_FILE = "/var/log/pe_file_hashes.log";
+// Function to calculate MD5 hash
+string calculate_md5(const string& file_path) {
+    unsigned char hash[MD5_DIGEST_LENGTH];
+    MD5_CTX md5_context;
 
-// Helper function to convert hash bytes to a string
-string bytes_to_hex(unsigned char* hash, size_t length) {
-    string result;
-    char buf[3];
-    for (size_t i = 0; i < length; i++) {
-        sprintf(buf, "%02x", hash[i]);
-        result.append(buf);
-    }
-    return result;
-}
-
-// Generalized function to compute a hash using the EVP interface
-string calculate_hash(const string& filepath, const EVP_MD* hash_algorithm) {
-    unsigned char buffer[8192];
-    unsigned char hash_result[EVP_MAX_MD_SIZE];
-    unsigned int hash_length = 0;
-    ifstream file(filepath, ios::binary);
-
+    ifstream file(file_path, ios::binary);
     if (!file) {
-        cerr << "Failed to open file: " << filepath << endl;
+        cerr << "Error opening file for MD5: " << file_path << endl;
         return "";
     }
 
-    // Create and initialize the digest context
-    EVP_MD_CTX* context = EVP_MD_CTX_new();
-    if (!context) {
-        cerr << "Failed to create digest context" << endl;
-        return "";
+    MD5_Init(&md5_context);
+
+    char buffer[8192];
+    while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0) {
+        MD5_Update(&md5_context, buffer, file.gcount());
     }
 
-    // Initialize the digest operation
-    if (EVP_DigestInit_ex(context, hash_algorithm, nullptr) != 1) {
-        cerr << "Failed to initialize digest operation" << endl;
-        EVP_MD_CTX_free(context);
-        return "";
+    MD5_Final(hash, &md5_context);
+
+    stringstream ss;
+    for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
+        ss << hex << setw(2) << setfill('0') << static_cast<int>(hash[i]);
     }
-
-    // Update the digest with file data
-    while (file.read(reinterpret_cast<char*>(buffer), sizeof(buffer))) {
-        if (EVP_DigestUpdate(context, buffer, file.gcount()) != 1) {
-            cerr << "Failed to update digest" << endl;
-            EVP_MD_CTX_free(context);
-            return "";
-        }
-    }
-
-    // Finalize the digest
-    if (EVP_DigestFinal_ex(context, hash_result, &hash_length) != 1) {
-        cerr << "Failed to finalize digest" << endl;
-        EVP_MD_CTX_free(context);
-        return "";
-    }
-
-    // Free the digest context
-    EVP_MD_CTX_free(context);
-
-    return bytes_to_hex(hash_result, hash_length);
+    return ss.str();
 }
 
-// Wrapper functions for MD5, SHA-1, and SHA-256
-string calculate_md5(const string& filepath) {
-    return calculate_hash(filepath, EVP_md5());
+// Function to calculate SHA-1 hash
+string calculate_sha1(const string& file_path) {
+    unsigned char hash[SHA_DIGEST_LENGTH];
+    SHA_CTX sha1_context;
+
+    ifstream file(file_path, ios::binary);
+    if (!file) {
+        cerr << "Error opening file for SHA-1: " << file_path << endl;
+        return "";
+    }
+
+    SHA1_Init(&sha1_context);
+
+    char buffer[8192];
+    while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0) {
+        SHA1_Update(&sha1_context, buffer, file.gcount());
+    }
+
+    SHA1_Final(hash, &sha1_context);
+
+    stringstream ss;
+    for (int i = 0; i < SHA_DIGEST_LENGTH; ++i) {
+        ss << hex << setw(2) << setfill('0') << static_cast<int>(hash[i]);
+    }
+    return ss.str();
 }
 
-string calculate_sha1(const string& filepath) {
-    return calculate_hash(filepath, EVP_sha1());
-}
+// Function to calculate SHA-256 hash
+string calculate_sha256(const string& file_path) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX sha256_context;
 
-string calculate_sha256(const string& filepath) {
-    return calculate_hash(filepath, EVP_sha256());
+    ifstream file(file_path, ios::binary);
+    if (!file) {
+        cerr << "Error opening file for SHA-256: " << file_path << endl;
+        return "";
+    }
+
+    SHA256_Init(&sha256_context);
+
+    char buffer[8192];
+    while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0) {
+        SHA256_Update(&sha256_context, buffer, file.gcount());
+    }
+
+    SHA256_Final(hash, &sha256_context);
+
+    stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
+        ss << hex << setw(2) << setfill('0') << static_cast<int>(hash[i]);
+    }
+    return ss.str();
 }
 
 // Function to log hashes to a file
-void log_hashes(const string& filepath, const string& md5_hash, const string& sha1_hash, const string& sha256_hash) {
-    ofstream log(LOG_FILE, ios::app);
-    if (log) {
-        auto now = chrono::system_clock::to_time_t(chrono::system_clock::now());
-        log << ctime(&now) << filepath << endl;
-        log << "  MD5:    " << md5_hash << endl;
-        log << "  SHA-1:  " << sha1_hash << endl;
-        log << "  SHA-256:" << sha256_hash << endl;
+void log_hashes(const string& file_path, const string& md5, const string& sha1, const string& sha256) {
+    ofstream log_file("/var/log/monitor_pe_files.log", ios::app);
+    if (!log_file) {
+        cerr << "Error opening log file." << endl;
+        return;
     }
-    else {
-        cerr << "Failed to write to log file: " << LOG_FILE << endl;
-    }
+
+    log_file << "File: " << file_path << endl;
+    log_file << "MD5: " << md5 << endl;
+    log_file << "SHA-1: " << sha1 << endl;
+    log_file << "SHA-256: " << sha256 << endl;
+    log_file << "----------------------------------------" << endl;
 }
 
 int main() {
@@ -116,7 +123,7 @@ int main() {
         return 1;
     }
 
-    // Map to store watch descriptors and corresponding paths
+    // Declare watch_descriptors map
     unordered_map<int, string> watch_descriptors;
 
     // Function to add a watch recursively
@@ -172,7 +179,7 @@ int main() {
                         } else {
                             cerr << "Failed to add watch for new directory: " << filename << endl;
                         }
-                    } else if (filename.ends_with(".exe")) {
+                    } else if (filename.size() >= 4 && filename.substr(filename.size() - 4) == ".exe") {
                         cout << "New PE file detected: " << filename << endl;
 
                         string md5_hash = calculate_md5(filename);
