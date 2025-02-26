@@ -1,18 +1,12 @@
 [Unit]
-Description=Monitor PE Files and Log Hashes
+Description=PE File Hashing Service
 After=network.target
-StartLimitIntervalSec=0
 
 [Service]
-Type=Simple
+ExecStart=/usr/local/bin/monitor_pe_files.sh
 Restart=always
-RestartSec=1
-ExecStart=/path/to/monitor_pe_files
-WorkingDirectory=/path/to
 User=root
 Group=root
-StandardOutput=append:/var/log/monitor_pe_files.log
-StandardError=append:/var/log/monitor_pe_files_error.log
 
 [Install]
 WantedBy=multi-user.target

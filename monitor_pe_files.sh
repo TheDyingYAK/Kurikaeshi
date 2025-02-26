@@ -1,6 +1,6 @@
 #!/bin/bash
 
-WATCH_DIR="/home/user/target_directory"
+WATCH_DIR="/home/kali"
 LOG_FILE="/var/log/pe_hashes.log"
 
 inotifywait -m -r -e close_write --format "%w%f" "$WATCH_DIR" | while read FILE; do
