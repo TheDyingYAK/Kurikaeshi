@@ -15,7 +15,13 @@ sudo apt update && sudo apt install inotify-tools -y
 ### Set up the Systemd Service
 1. Create the service file:
 ```bash
-sudo cp pe_monitor_files /etc/systemd/system/pe_monitor_files.service
+sudo cp pe_monitor.service /etc/systemd/system/pe_monitor.service
+```
+
+### Copy the shell script to 
+```bash
+sudo cp monitor_pe_files.sh /usr/local/bin/monitor_pe_files.sh
+sudo chmod +x /usr/local/bin/monitor_pe_files.sh
 ```
 
 ### Enable and Start the Service
