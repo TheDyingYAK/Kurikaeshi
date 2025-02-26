@@ -1,13 +1,16 @@
 [Unit]
 Description=Monitor PE Files and Log Hashes
 After=network.target
+StartLimitIntervalSec=0
 
 [Service]
+Type=Simple
+Restart=always
+RestartSec=1
 ExecStart=/path/to/monitor_pe_files
 WorkingDirectory=/path/to
 User=root
 Group=root
-Restart=always
 StandardOutput=append:/var/log/monitor_pe_files.log
 StandardError=append:/var/log/monitor_pe_files_error.log
 
